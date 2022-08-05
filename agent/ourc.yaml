@@ -27,3 +27,4 @@ update_encoder: ${update_encoder}
 replay_buffer_size: ${replay_buffer_size}
 contrastive_update_rate: 3
 temperature: 0.07
+domain: ${domain}
