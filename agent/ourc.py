@@ -154,7 +154,7 @@ class OURCAgent(DDPGAgent):
         return metrics
 
     def compute_intr_reward(self, skill, taus4gb, step, contrastive_batch):
-
+        metrics = dict()
         # compute q(z | tau) reward
         z_hat = torch.argmax(skill, dim=1)
         d_pred = self.gb(taus4gb)
@@ -177,7 +177,11 @@ class OURCAgent(DDPGAgent):
 
         skill_list = torch.argmax(skill, dim=1, keepdim=True)
         dis_reward = logits[skill_list].to(self.device)
-        return gb_reward * self.gb_scale + dis_reward
+
+        metrics.update({str(idx): key.item() for idx, key in enumerate(logits)})
+        metrics['dis_reward'] = dis_reward.mean().item()
+        metrics['gb_reward'] = dis_reward.mean().item()
+        return gb_reward * self.gb_scale + dis_reward, metrics
 
     def compute_info_nce_loss(self, features):
 
@@ -266,9 +270,10 @@ class OURCAgent(DDPGAgent):
 
             # compute intrinsic reward
             with torch.no_grad():
-                intr_reward = self.compute_intr_reward(skill, generator_b_batch, step, contrastive_batch)
+                intr_reward, metri = self.compute_intr_reward(skill, generator_b_batch, step, contrastive_batch)
 
             if self.use_tb or self.use_wandb:
+                metrics.update(metri)
                 metrics['intr_reward'] = intr_reward.mean().item()
                 metrics['tau_batch_size'] = tau_batch_size
             reward = intr_reward
