@@ -1,0 +1,18 @@
+/temp/
+/.idea/
+# 默认忽略的文件
+/shelf/
+/workspace.xml
+# 基于编辑器的 HTTP 客户端请求
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+/self_log.md
+/script.py
+/img/
+/run_1.sh
+/run_0.sh
+/exp_local/
+/models/
+/run_more.sh
