@@ -54,7 +54,7 @@ class Discriminator(nn.Module):
 
 class OURCAgent(DDPGAgent):
     def __init__(self, update_skill_every_step, skill_dim, gb_scale,
-                 update_encoder, contrastive_update_rate, temperature, domain, **kwargs):
+                 update_encoder, contrastive_update_rate, temperature, **kwargs):
         self.skill_dim = skill_dim
         self.update_skill_every_step = update_skill_every_step
         self.gb_scale = gb_scale
@@ -62,14 +62,14 @@ class OURCAgent(DDPGAgent):
         self.batch_size = kwargs['batch_size']
         self.contrastive_update_rate = contrastive_update_rate
         self.temperature = temperature
-        self.domain = domain
+
         # increase obs shape to include skill dim
         kwargs["meta_dim"] = self.skill_dim
 
         # create actor and critic
         super().__init__(**kwargs)
-        self.tau_dim = 2 * self.update_skill_every_step if self.domain == 'quadruped' else \
-            (self.obs_dim - self.skill_dim) * self.update_skill_every_step
+        self.tau_dim = 2 * self.update_skill_every_step
+        # self.tau_dim = (self.obs_dim - self.skill_dim) * self.update_skill_every_step
 
         # create ourc
         self.gb = GeneratorB(self.tau_dim, self.skill_dim,
@@ -179,7 +179,7 @@ class OURCAgent(DDPGAgent):
         dis_reward = logits[skill_list].to(self.device)
 
         if self.use_tb or self.use_wandb:
-            metrics.update({str(idx): key.item() for idx, key in enumerate(logits)})
+            metrics.update({"skill_" + str(idx): key.item() for idx, key in enumerate(logits)})
             metrics['dis_reward'] = dis_reward.mean().item()
             metrics['gb_reward'] = gb_reward.mean().item()
 
