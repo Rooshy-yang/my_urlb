@@ -267,7 +267,7 @@ class OURCAgent(DDPGAgent):
                     metrics['intr_reward'] = 0
                     metrics['tau_batch_size'] = 0
                     metrics['contrastive_loss'] = 0
-                    metrics.update({"skill_" + str(idx): key.item() for idx, key in enumerate([0] * self.skill_dim)})
+                    metrics.update({"skill_" + str(idx): key for idx, key in enumerate([0] * self.skill_dim)})
                     metrics['dis_reward'] = 0
                     metrics['extr_reward'] = extr_reward.mean().item()
                     metrics['batch_reward'] = 0
