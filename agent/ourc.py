@@ -263,14 +263,13 @@ class OURCAgent(DDPGAgent):
             contrastive_batch = torch.as_tensor([])
 
             if tau_batch_size == 1:
-                return metrics
+                return None
 
             for _ in range(self.contrastive_update_rate):
                 contrastive_batch = self.skillsBuffer.sample_batch(batch_size=tau_batch_size * self.skill_dim,
                                                                    counts=[tau_batch_size] * self.skill_dim)
                 contrastive_batch = contrastive_batch.to(self.device)
                 metrics.update(self.update_contrastive(contrastive_batch))
-            # TODO : need to fix wandb read csv error
 
             # compute intrinsic reward
             with torch.no_grad():
