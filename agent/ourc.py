@@ -68,8 +68,8 @@ class OURCAgent(DDPGAgent):
 
         # create actor and critic
         super().__init__(**kwargs)
-        # self.tau_dim = 2 * self.update_skill_every_step
-        self.tau_dim = (self.obs_dim - self.skill_dim) * self.update_skill_every_step
+        self.tau_dim = 2 * self.update_skill_every_step
+        # self.tau_dim = (self.obs_dim - self.skill_dim) * self.update_skill_every_step
 
         # create ourc
         self.gb = GeneratorB(self.tau_dim, self.skill_dim,
