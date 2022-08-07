@@ -263,7 +263,15 @@ class OURCAgent(DDPGAgent):
             contrastive_batch = torch.as_tensor([])
 
             if tau_batch_size == 1:
-                return None
+                if self.use_tb or self.use_wandb:
+                    metrics['intr_reward'] = 0
+                    metrics['tau_batch_size'] = 0
+                    metrics['contrastive_loss'] = 0
+                    metrics.update({"skill_" + str(idx): key.item() for idx, key in enumerate([0] * self.skill_dim)})
+                    metrics['dis_reward'] = 0
+                    metrics['extr_reward'] = extr_reward.mean().item()
+                    metrics['batch_reward'] = 0
+                return metrics
 
             for _ in range(self.contrastive_update_rate):
                 contrastive_batch = self.skillsBuffer.sample_batch(batch_size=tau_batch_size * self.skill_dim,
