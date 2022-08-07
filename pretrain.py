@@ -211,9 +211,6 @@ class Workspace:
                 if meta is not old_meta:
                     self.agent.add_buffer_skill2episode(current_tau_given_skill, old_meta)
                     current_tau_given_skill = collections.deque()
-                if self.cfg.domain == "quadruped":
-                    current_tau_given_skill.append(time_step.observation[:2])
-                else:
                     current_tau_given_skill.append(time_step.observation)
 
             # sample action

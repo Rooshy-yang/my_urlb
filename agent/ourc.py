@@ -62,17 +62,20 @@ class OURCAgent(DDPGAgent):
         self.batch_size = kwargs['batch_size']
         self.contrastive_update_rate = contrastive_update_rate
         self.temperature = temperature
+
         # increase obs shape to include skill dim
         kwargs["meta_dim"] = self.skill_dim
 
         # create actor and critic
         super().__init__(**kwargs)
+        # self.tau_dim = 2 * self.update_skill_every_step
         self.tau_dim = (self.obs_dim - self.skill_dim) * self.update_skill_every_step
+
         # create ourc
-        self.gb = GeneratorB((self.obs_dim - self.skill_dim) * self.update_skill_every_step, self.skill_dim,
+        self.gb = GeneratorB(self.tau_dim, self.skill_dim,
                              kwargs['hidden_dim']).to(kwargs['device'])
 
-        self.discriminator = Discriminator((self.obs_dim - self.skill_dim) * self.update_skill_every_step,
+        self.discriminator = Discriminator(self.tau_dim,
                                            self.skill_dim,
                                            kwargs['hidden_dim']).to(kwargs['device'])
 
@@ -150,7 +153,7 @@ class OURCAgent(DDPGAgent):
 
         return metrics
 
-    def compute_intr_reward(self, skill, taus4gb, step, contrastive_batch):
+    def compute_intr_reward(self, skill, taus4gb, step, contrastive_batch, metrics):
 
         # compute q(z | tau) reward
         z_hat = torch.argmax(skill, dim=1)
@@ -174,6 +177,12 @@ class OURCAgent(DDPGAgent):
 
         skill_list = torch.argmax(skill, dim=1, keepdim=True)
         dis_reward = logits[skill_list].to(self.device)
+
+        if self.use_tb or self.use_wandb:
+            metrics.update({"skill_" + str(idx): key.item() for idx, key in enumerate(logits)})
+            metrics['dis_reward'] = dis_reward.mean().item()
+            metrics['gb_reward'] = gb_reward.mean().item()
+
         return gb_reward * self.gb_scale + dis_reward
 
     def compute_info_nce_loss(self, features):
@@ -263,7 +272,7 @@ class OURCAgent(DDPGAgent):
 
             # compute intrinsic reward
             with torch.no_grad():
-                intr_reward = self.compute_intr_reward(skill, generator_b_batch, step, contrastive_batch)
+                intr_reward = self.compute_intr_reward(skill, generator_b_batch, step, contrastive_batch, metrics)
 
             if self.use_tb or self.use_wandb:
                 metrics['intr_reward'] = intr_reward.mean().item()
