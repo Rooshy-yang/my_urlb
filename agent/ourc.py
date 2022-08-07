@@ -271,6 +271,13 @@ class OURCAgent(DDPGAgent):
                     metrics['dis_reward'] = 0
                     metrics['extr_reward'] = extr_reward.mean().item()
                     metrics['batch_reward'] = 0
+                    metrics['critic_target_q'] = 0
+                    metrics['critic_q1'] = 0
+                    metrics['critic_q2'] = 0
+                    metrics['critic_loss'] = 0
+                    metrics['actor_loss'] = 0
+                    metrics['actor_logprob'] = 0
+                    metrics['actor_ent'] = 0
                 return metrics
 
             for _ in range(self.contrastive_update_rate):
