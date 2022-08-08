@@ -168,6 +168,7 @@ class Workspace:
         self.train_video_recorder.init(time_step.observation)
         metrics = None
         current_tau_given_skill = collections.deque()
+        current_action_given_skill = collections.deque()
         while train_until_step(self.global_step):
             if time_step.last():
                 self._global_episode += 1
@@ -206,19 +207,21 @@ class Workspace:
             old_meta = meta
             meta = self.agent.update_meta(meta, self.global_step, time_step)
 
-            # only add here for "ours" and "ourc"
-            if self.agent_name == "ours" or self.agent_name == "ourc":
-                if meta is not old_meta:
-                    self.agent.add_buffer_skill2episode(current_tau_given_skill, old_meta)
-                    current_tau_given_skill = collections.deque()
-                current_tau_given_skill.append(time_step.observation)
-
             # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):
                 action = self.agent.act(time_step.observation,
                                         meta,
                                         self.global_step,
                                         eval_mode=False)
+
+            # only add here for "ours" and "ourc"
+            if self.agent_name == "ours" or self.agent_name == "ourc":
+                if meta is not old_meta:
+                    self.agent.add_buffer_skill2episode(current_tau_given_skill,current_action_given_skill, old_meta)
+                    current_tau_given_skill = collections.deque()
+                    current_action_given_skill = collections.deque()
+                current_tau_given_skill.append(time_step.observation)
+                current_action_given_skill.append(action)
 
             # try to update the agent
             if not seed_until_step(self.global_step):
