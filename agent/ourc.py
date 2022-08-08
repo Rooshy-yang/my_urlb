@@ -164,6 +164,9 @@ class OURCAgent(DDPGAgent):
                                        z_hat] - math.log(1 / self.skill_dim)
         gb_reward = gb_reward.reshape(-1, 1)
 
+        if self.use_tb or self.use_wandb:
+            metrics['gb_reward'] = gb_reward.mean().item()
+
         # compute contrastive reward
         if len(contrastive_batch) < 2:
             return gb_reward
@@ -179,9 +182,8 @@ class OURCAgent(DDPGAgent):
         dis_reward = logits[skill_list].to(self.device)
 
         if self.use_tb or self.use_wandb:
-            metrics.update({"skill_" + str(idx): key.item() for idx, key in enumerate(logits)})
+            metrics.update({"Skill_{}_contrastive_reward".format(str(idx)): key.item() for idx, key in enumerate(logits)})
             metrics['dis_reward'] = dis_reward.mean().item()
-            metrics['gb_reward'] = gb_reward.mean().item()
 
         return gb_reward * self.gb_scale + dis_reward
 
@@ -263,13 +265,17 @@ class OURCAgent(DDPGAgent):
             tau_batch_size = min(min(self.skillsBuffer.sizes), self.batch_size // self.skill_dim)
             contrastive_batch = torch.as_tensor([])
 
-            if tau_batch_size != 1:
+            if tau_batch_size == 1:
+                if self.use_tb or self.use_wandb:
+                    metrics['contrastive_loss'] = 0
+                    metrics.update({"Skill_{}_contrastive_reward".format(str(idx)): key for idx, key in enumerate([0] * self.skill_dim)})
+                    metrics['dis_reward'] = 0
+            else:
                 for _ in range(self.contrastive_update_rate):
                     contrastive_batch = self.skillsBuffer.sample_batch(batch_size=tau_batch_size * self.skill_dim,
                                                                        counts=[tau_batch_size] * self.skill_dim)
                     contrastive_batch = contrastive_batch.to(self.device)
                     metrics.update(self.update_contrastive(contrastive_batch))
-            # TODO : need to fix wandb read csv error
 
             # compute intrinsic reward
             with torch.no_grad():
