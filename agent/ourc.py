@@ -172,13 +172,12 @@ class OURCAgent(DDPGAgent):
         features = self.discriminator(tau_batch)
         logits, labels = self.compute_info_nce_loss(features)
 
-        logits = torch.softmax(logits, dim=1)[:, logits.shape[0] // self.skill_dim - 1].view(tau_batch.shape[0], -1)
-        contrastive_reward = torch.mean(logits, dim=1).to(self.device).view(-1, 1)
+        contrastive_reward = torch.softmax(logits, dim=1)[:, 0].view(tau_batch.shape[0], -1)
 
         intri_reward = gb_reward * self.gb_scale + contrastive_reward
 
         if self.use_tb or self.use_wandb:
-            metrics['dis_reward'] = contrastive_reward.mean().item()
+            metrics['contrastive_reward'] = contrastive_reward.mean().item()
 
         return intri_reward
 
