@@ -241,11 +241,12 @@ class OURCAgent(DDPGAgent):
             skill = np.asarray([[i] * tau_batch_size for i in range(self.skill_dim)]).flatten()
             skill = torch.as_tensor(skill, device=self.device)
 
-            if tau_batch_size == 1:
+            if tau_batch_size <= 1:
                 #  NO update if tau_batch_size == 1
                 #  padding csv file for wandb bug
                 if self.use_tb or self.use_wandb:
-                    metrics['dis_reward'] = 0
+                    metrics['contrastive_reward'] = 0
+                    metrics['gb_reward'] = 0
                     metrics['extr_reward'] = 0
                     metrics['batch_reward'] = 0
                     metrics['critic_target_q'] = 0
