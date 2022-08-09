@@ -246,8 +246,12 @@ class OURCAgent(DDPGAgent):
                 #  padding csv file for wandb bug
                 if self.use_tb or self.use_wandb:
                     metrics['contrastive_reward'] = 0
+                    metrics['contrastive_loss'] = 0
+                    metrics['gb_loss'] = 0
+                    metrics['gb_acc'] = 0
                     metrics['gb_reward'] = 0
-                    metrics['extr_reward'] = 0
+                    metrics['intr_reward'] = 0
+                    metrics['tau_batch_size'] = tau_batch_size
                     metrics['batch_reward'] = 0
                     metrics['critic_target_q'] = 0
                     metrics['critic_q1'] = 0
