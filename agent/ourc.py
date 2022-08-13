@@ -53,17 +53,17 @@ class Discriminator(nn.Module):
 
 
 class OURCAgent(DDPGAgent):
-    def __init__(self, update_skill_every_step, skill_dim, gb_scale,
+    def __init__(self, update_skill_every_step, skill_dim, contrastive_scale,
                  update_encoder, contrastive_update_rate, temperature, **kwargs):
         self.skill_dim = skill_dim
         self.update_skill_every_step = update_skill_every_step
-        self.gb_scale = gb_scale
+        self.contrastive_scale = contrastive_scale
         self.update_encoder = update_encoder
         self.batch_size = kwargs['batch_size']
         self.contrastive_update_rate = contrastive_update_rate
         self.temperature = temperature
 
-        self.tau_len = update_skill_every_step
+        self.tau_len = 1
         # increase obs shape to include skill dim
         kwargs["meta_dim"] = self.skill_dim
 
@@ -116,7 +116,7 @@ class OURCAgent(DDPGAgent):
     def update_meta(self, meta, global_step, time_step, finetune=False):
         if global_step % self.update_skill_every_step == 0:
             return self.init_meta()
-        return meta
+        return meta.copy()
 
     def update_gb(self, skill, gb_batch, step):
         metrics = dict()
@@ -174,7 +174,7 @@ class OURCAgent(DDPGAgent):
 
         contrastive_reward = torch.softmax(logits, dim=1)[:, 0].view(tau_batch.shape[0], -1)
 
-        intri_reward = gb_reward * self.gb_scale + contrastive_reward
+        intri_reward = gb_reward + contrastive_reward * self.contrastive_scale
 
         if self.use_tb or self.use_wandb:
             metrics['contrastive_reward'] = contrastive_reward.mean().item()

@@ -17,7 +17,6 @@ feature_dim: 50
 stddev_schedule: 0.2
 stddev_clip: 0.3
 skill_dim: 16
-gb_scale: 1.0
 update_skill_every_step: 50
 nstep: 3
 batch_size: 1024
@@ -27,3 +26,4 @@ update_encoder: ${update_encoder}
 replay_buffer_size: ${replay_buffer_size}
 contrastive_update_rate: 3
 temperature: 0.07
+contrastive_scale: 0.0
