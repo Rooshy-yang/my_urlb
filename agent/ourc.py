@@ -284,11 +284,16 @@ class OURCAgent(DDPGAgent):
                     metrics['tau_batch_size'] = tau_batch_size
 
                 # sample transition for RL
+
+                # select batch index from constrastive_batch (batch_size * tau_dim)
                 batch_idx = np.random.randint(0, contrastive_batch.shape[0], size=contrastive_batch.shape[0])
-                obs_idx = np.random.randint(0, self.tau_len - 1, size=contrastive_batch.shape[0])
-                obs_idx += np.asarray(range(len(obs_idx))) * self.tau_len
+                # obs_batch.shape = (tau_batch_size * tau_len, obs_dim)
                 obs_batch = contrastive_batch[batch_idx].view(-1, self.tau_dim // self.tau_len)
                 act_batch = actions_batch[batch_idx].view(-1, self.action_dim)
+                # tau_dim = tau_len(obs_num) * obs_dim , so the number of obs index in (0, obs_num - 1)
+                obs_idx_num = np.random.randint(0, self.tau_len - 1, size=contrastive_batch.shape[0]) if self.tau_len > 1 \
+                    else np.asarray([0] * contrastive_batch.shape[0])
+                obs_idx = obs_idx_num + np.asarray(range(len(obs_idx_num))) * self.tau_len
 
                 obs = obs_batch[obs_idx].view(contrastive_batch.shape[0], -1)
                 next_obs = obs_batch[obs_idx + 1].view(contrastive_batch.shape[0], -1)
