@@ -12,7 +12,6 @@ from dm_env import specs
 
 import utils
 from agent.ddpg import DDPGAgent
-from skill_buffer import SkillsBuffer
 
 
 class GeneratorB(nn.Module):
@@ -63,7 +62,7 @@ class OURCAgent(DDPGAgent):
         self.contrastive_update_rate = contrastive_update_rate
         self.temperature = temperature
 
-        self.tau_len = 1
+        self.tau_len = 2
         # increase obs shape to include skill dim
         kwargs["meta_dim"] = self.skill_dim
 
@@ -91,24 +90,16 @@ class OURCAgent(DDPGAgent):
         self.gb.train()
         self.discriminator.train()
 
-        # define a simple FIFO replay buffer for B(`| z)
-        self.skillsBuffer = SkillsBuffer(self.tau_dim, self.batch_size, skill_dim,
-                                         self.action_dim, self.tau_len)
+        self.skill_ptr = 0
 
-    def add_buffer_skill2episode(self, episode, actions, meta):
-        if len(episode) == 0:
-            return
-        tau = np.concatenate(episode)
-        acts = np.concatenate(actions)
-        skill = np.argmax(meta['skill'])
-        self.skillsBuffer.store(skill, tau, acts)
 
     def get_meta_specs(self):
         return specs.Array((self.skill_dim,), np.float32, 'skill'),
 
     def init_meta(self):
         skill = np.zeros(self.skill_dim, dtype=np.float32)
-        skill[np.random.choice(self.skill_dim)] = 1.0
+        skill[self.skill_ptr] = 1
+        self.skill_ptr = (self.skill_ptr + 1) % self.skill_dim
         meta = OrderedDict()
         meta['skill'] = skill
         return meta
@@ -116,12 +107,12 @@ class OURCAgent(DDPGAgent):
     def update_meta(self, meta, global_step, time_step, finetune=False):
         if global_step % self.update_skill_every_step == 0:
             return self.init_meta()
-        return meta.copy()
+        return meta
 
     def update_gb(self, skill, gb_batch, step):
         metrics = dict()
-
-        loss, df_accuracy = self.compute_gb_loss(gb_batch, skill)
+        labels = torch.argmax(skill, dim=1)
+        loss, df_accuracy = self.compute_gb_loss(gb_batch, labels)
 
         self.gb_opt.zero_grad()
         if self.encoder_opt is not None:
@@ -137,10 +128,10 @@ class OURCAgent(DDPGAgent):
 
         return metrics
 
-    def update_contrastive(self, taus):
+    def update_contrastive(self, taus, skills):
         metrics = dict()
         features = self.discriminator(taus)
-        logits, labels = self.compute_info_nce_loss(features)
+        logits, labels = self.compute_info_nce_loss(features, skills)
         loss = self.discriminator_criterion(logits, labels)
 
         self.dis_opt.zero_grad()
@@ -156,13 +147,13 @@ class OURCAgent(DDPGAgent):
 
         return metrics
 
-    def compute_intr_reward(self, skill, tau_batch, metrics):
+    def compute_intr_reward(self, skills, tau_batch, metrics):
 
         # compute q(z | tau) reward
         d_pred = self.gb(tau_batch)
         d_pred_log_softmax = F.log_softmax(d_pred, dim=1)
         _, pred_z = torch.max(d_pred_log_softmax, dim=1, keepdim=True)
-        gb_reward = d_pred_log_softmax[torch.arange(d_pred.shape[0]), skill] - math.log(1 / self.skill_dim)
+        gb_reward = d_pred_log_softmax[torch.arange(d_pred.shape[0]), torch.argmax(skills, dim=1)] - math.log(1 / self.skill_dim)
         gb_reward = gb_reward.reshape(-1, 1)
 
         if self.use_tb or self.use_wandb:
@@ -170,7 +161,7 @@ class OURCAgent(DDPGAgent):
 
         # compute contrastive reward
         features = self.discriminator(tau_batch)
-        logits, labels = self.compute_info_nce_loss(features)
+        logits, labels = self.compute_info_nce_loss(features, skills)
 
         contrastive_reward = torch.softmax(logits, dim=1)[:, 0].view(tau_batch.shape[0], -1)
 
@@ -181,11 +172,12 @@ class OURCAgent(DDPGAgent):
 
         return intri_reward
 
-    def compute_info_nce_loss(self, features):
+    def compute_info_nce_loss(self, features, skills):
 
         size = features.shape[0] // self.skill_dim
-        labels = [[i] * size for i in range(self.skill_dim)]
-        labels = torch.as_tensor(labels).view(1, -1).squeeze(0)
+        # labels = [[i] * size for i in range(self.skill_dim)]
+        # labels = torch.as_tensor(labels).view(1, -1).squeeze(0)
+        labels = torch.argmax(skills, dim=1)
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
         labels = labels.to(self.device)
 
@@ -235,75 +227,49 @@ class OURCAgent(DDPGAgent):
 
         if self.reward_free:
 
-            # update contrastive, tau_batch_size not larger than self.batch_size
-            tau_batch_size = min(min(self.skillsBuffer.sizes), self.batch_size // self.skill_dim)
-            contrastive_batch = torch.as_tensor([])
-            skill = np.asarray([[i] * tau_batch_size for i in range(self.skill_dim)]).flatten()
-            skill = torch.as_tensor(skill, device=self.device)
+            for _ in range(self.contrastive_update_rate):
+                batch = next(replay_iter)
+                trajectory, action_trajectory, skill_trajectory = utils.to_torch(batch, self.device)
 
-            if tau_batch_size <= 1:
-                #  NO update if tau_batch_size == 1
-                #  padding csv file for wandb bug
-                if self.use_tb or self.use_wandb:
-                    metrics['contrastive_reward'] = 0
-                    metrics['contrastive_loss'] = 0
-                    metrics['gb_loss'] = 0
-                    metrics['gb_acc'] = 0
-                    metrics['gb_reward'] = 0
-                    metrics['intr_reward'] = 0
-                    metrics['tau_batch_size'] = tau_batch_size
-                    metrics['batch_reward'] = 0
-                    metrics['critic_target_q'] = 0
-                    metrics['critic_q1'] = 0
-                    metrics['critic_q2'] = 0
-                    metrics['critic_loss'] = 0
-                    metrics['actor_loss'] = 0
-                    metrics['actor_logprob'] = 0
-                    metrics['actor_ent'] = 0
-                return metrics
-            else:
-                for _ in range(self.contrastive_update_rate):
-                    contrastive_batch, actions_batch = self.skillsBuffer.sample_batch(
-                        batch_size=tau_batch_size * self.skill_dim,
-                        counts=[tau_batch_size] * self.skill_dim)
-                    contrastive_batch = contrastive_batch.to(self.device)
-                    metrics.update(self.update_contrastive(contrastive_batch))
+                # without consider the case self.skill_dim * self.update_skill_every_step > max_len
+                # clip top (self.skill_dim * self.update_skill_every_step) flames
+                trajectory = trajectory.view(trajectory.shape[0], -1, self.tau_dim)
+                skill_trajectory = skill_trajectory.view(skill_trajectory.shape[0], -1, self.skill_dim * self.tau_len)
+                action_trajectory = action_trajectory.view(action_trajectory, -1, self.action_dim * self.tau_len)
 
-                actions_batch = actions_batch.to(self.device)
+                interval = self.update_skill_every_step // self.tau_len
+                trajectory_index = np.random.randint(0, interval,
+                                                     size=self.skill_dim * trajectory.shape[0]).reshape([trajectory.shape[0], self.skill_dim])
+                trajectory_index += np.arange(self.skill_dim) * interval
 
-                # update q(z | tau)
-                # bucket count for less time spending
-                metrics.update(self.update_gb(skill, contrastive_batch, step))
+                rows = torch.arange(trajectory.shape[0]).unsqueeze(1).expand(trajectory.shape[0], self.skill_dim).flatten()
+                cols = trajectory_index.flatten()
+                tau = trajectory[rows, cols].view(-1, self.tau_dim)
 
-                # compute intrinsic reward
-                with torch.no_grad():
-                    intr_reward = self.compute_intr_reward(skill, contrastive_batch, metrics)
+                skill = skill_trajectory[rows, cols + 1]
+                action = action_trajectory[rows, cols + 1]
 
-                if self.use_tb or self.use_wandb:
-                    metrics['intr_reward'] = intr_reward.mean().item()
-                    metrics['tau_batch_size'] = tau_batch_size
+                metrics.update(self.update_contrastive(tau, skill))
 
-                # sample transition for RL
+            rows = np.arange(tau.shape[0])
+            cols = np.random.randint(0, self.tau_dim - self.nstep, size=tau.shape[0])
 
-                # select batch index from constrastive_batch (batch_size * tau_dim)
-                batch_idx = np.random.randint(0, contrastive_batch.shape[0], size=contrastive_batch.shape[0])
-                # obs_batch.shape = (tau_batch_size * tau_len, obs_dim)
-                obs_batch = contrastive_batch[batch_idx].view(-1, self.tau_dim // self.tau_len)
-                act_batch = actions_batch[batch_idx].view(-1, self.action_dim)
-                # tau_dim = tau_len(obs_num) * obs_dim , so the number of obs index in (0, obs_num - 1)
-                obs_idx_num = np.random.randint(0, self.tau_len - 1, size=contrastive_batch.shape[0]) if self.tau_len > 1 \
-                    else np.asarray([0] * contrastive_batch.shape[0])
-                obs_idx = obs_idx_num + np.asarray(range(len(obs_idx_num))) * self.tau_len
+            obs = tau[rows, cols]
+            next_obs = tau[rows, cols + self.nstep]
+            discount = torch.as_tensor([0.99 ** self.nstep], device=self.device)
 
-                obs = obs_batch[obs_idx].view(contrastive_batch.shape[0], -1)
-                next_obs = obs_batch[obs_idx + 1].view(contrastive_batch.shape[0], -1)
-                action = act_batch[obs_idx].view(contrastive_batch.shape[0], -1)
-                reward = intr_reward[batch_idx].view(contrastive_batch.shape[0], -1)
-                skill = skill[batch_idx].view(contrastive_batch.shape[0], -1)
-                skill = torch.zeros([contrastive_batch.shape[0], self.skill_dim], device=self.device).scatter(1, skill,
-                                                                                                              1)
-                discount = torch.as_tensor([0.99 ** 3] * contrastive_batch.shape[0], device=self.device).view(
-                    contrastive_batch.shape[0], -1)
+            # update q(z | tau)
+            # bucket count for less time spending
+            metrics.update(self.update_gb(skill, tau, step))
+
+            # compute intrinsic reward
+            with torch.no_grad():
+                intr_reward = self.compute_intr_reward(skill, tau, metrics)
+
+            if self.use_tb or self.use_wandb:
+                metrics['intr_reward'] = intr_reward.mean().item()
+
+            reward = intr_reward
         else:
             batch = next(replay_iter)
 

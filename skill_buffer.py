@@ -149,24 +149,26 @@ class ReplayBuffer(IterableDataset):
         self._samples_since_last_fetch += 1
         episode = self._sample_episode()
         # add +1 for the first dummy transition
-        idx = np.random.randint(0, episode_len(episode) - self._nstep + 1) + 1
+        # idx = np.random.randint(0, episode_len(episode) - self._nstep + 1) + 1
         # meta = []
         # for spec in self._storage._meta_specs:
         #     meta.append(episode[spec.name][idx - 1])
-        obs = episode['observation'][idx - 1]
+        # obs = episode['observation'][idx - 1]
         # action = episode['action'][idx]
-        next_obs = episode['observation'][idx + self._nstep - 1]
-        reward = np.zeros_like(episode['reward'][idx])
-        discount = np.ones_like(episode['discount'][idx])
-        for i in range(self._nstep):
-            step_reward = episode['reward'][idx + i]
-            reward += discount * step_reward
-            discount *= episode['discount'][idx + i] * self._discount
+        # next_obs = episode['observation'][idx + self._nstep - 1]
+        # reward = np.zeros_like(episode['reward'][idx])
+        # discount = np.ones_like(episode['discount'][idx])
+        # for i in range(self._nstep):
+        #     step_reward = episode['reward'][idx + i]
+        #     reward += discount * step_reward
+        #     discount *= episode['discount'][idx + i] * self._discount
 
         trajectory = episode['observation']
-        action_trajectory = episode['action']
+        action = episode['action']
         skill = episode['skill']
-        return (trajectory, action_trajectory, obs, next_obs, discount, skill)
+
+        # return (trajectory, action, obs, next_obs, discount, skill)
+        return (trajectory, action, skill)
 
     def __iter__(self):
         while True:

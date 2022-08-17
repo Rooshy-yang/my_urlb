@@ -19,7 +19,7 @@ from dm_env import specs
 import dmc
 import utils
 from logger import Logger
-from replay_buffer import ReplayBufferStorage, make_replay_loader
+from skill_buffer import ReplayBufferStorage, make_replay_loader
 from video import TrainVideoRecorder, VideoRecorder
 
 torch.backends.cudnn.benchmark = True
@@ -167,8 +167,7 @@ class Workspace:
         self.replay_storage.add(time_step, meta)
         self.train_video_recorder.init(time_step.observation)
         metrics = None
-        current_tau_given_skill = collections.deque()
-        current_action_given_skill = collections.deque()
+
         while train_until_step(self.global_step):
             if time_step.last():
                 self._global_episode += 1
@@ -203,8 +202,7 @@ class Workspace:
             if eval_every_step(self.global_step):
                 self.logger.log('eval_total_time', self.timer.total_time(),
                                 self.global_frame)
-                self.eval()
-            old_meta = meta
+                # self.eval()
             meta = self.agent.update_meta(meta, self.global_step, time_step)
 
             # sample action
@@ -213,15 +211,6 @@ class Workspace:
                                         meta,
                                         self.global_step,
                                         eval_mode=False)
-
-            # only add here for "ours" and "ourc"
-            if self.agent_name == "ours" or self.agent_name == "ourc":
-                if meta is not old_meta:
-                    self.agent.add_buffer_skill2episode(current_tau_given_skill,current_action_given_skill, old_meta)
-                    current_tau_given_skill = collections.deque()
-                    current_action_given_skill = collections.deque()
-                current_tau_given_skill.append(time_step.observation)
-                current_action_given_skill.append(action)
 
             # try to update the agent
             if not seed_until_step(self.global_step):

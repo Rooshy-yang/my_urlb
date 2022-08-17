@@ -157,6 +157,7 @@ class DDPGAgent:
         self.init_critic = init_critic
         self.feature_dim = feature_dim
         self.solved_meta = None
+        self.nstep = nstep
 
         # models
         if obs_type == 'pixels':
