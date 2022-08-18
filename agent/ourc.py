@@ -62,7 +62,7 @@ class OURCAgent(DDPGAgent):
         self.contrastive_update_rate = contrastive_update_rate
         self.temperature = temperature
 
-        self.tau_len = 2
+        self.tau_len = update_skill_every_step
         # increase obs shape to include skill dim
         kwargs["meta_dim"] = self.skill_dim
 
@@ -175,8 +175,7 @@ class OURCAgent(DDPGAgent):
     def compute_info_nce_loss(self, features, skills):
 
         size = features.shape[0] // self.skill_dim
-        # labels = [[i] * size for i in range(self.skill_dim)]
-        # labels = torch.as_tensor(labels).view(1, -1).squeeze(0)
+
         labels = torch.argmax(skills, dim=1)
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
         labels = labels.to(self.device)
@@ -228,35 +227,18 @@ class OURCAgent(DDPGAgent):
         if self.reward_free:
 
             for _ in range(self.contrastive_update_rate):
+                # one trajectory for self.skill_dim'th tau with different skill, obs,next_obs,action from every tau,
                 batch = next(replay_iter)
-                trajectory, action_trajectory, skill_trajectory = utils.to_torch(batch, self.device)
-
-                # without consider the case self.skill_dim * self.update_skill_every_step > max_len
-                # clip top (self.skill_dim * self.update_skill_every_step) flames
-                trajectory = trajectory.view(trajectory.shape[0], -1, self.tau_dim)
-                skill_trajectory = skill_trajectory.view(skill_trajectory.shape[0], -1, self.skill_dim * self.tau_len)
-                action_trajectory = action_trajectory.view(action_trajectory, -1, self.action_dim * self.tau_len)
-
-                interval = self.update_skill_every_step // self.tau_len
-                trajectory_index = np.random.randint(0, interval,
-                                                     size=self.skill_dim * trajectory.shape[0]).reshape([trajectory.shape[0], self.skill_dim])
-                trajectory_index += np.arange(self.skill_dim) * interval
-
-                rows = torch.arange(trajectory.shape[0]).unsqueeze(1).expand(trajectory.shape[0], self.skill_dim).flatten()
-                cols = trajectory_index.flatten()
-                tau = trajectory[rows, cols].view(-1, self.tau_dim)
-
-                skill = skill_trajectory[rows, cols + 1]
-                action = action_trajectory[rows, cols + 1]
+                tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
+                # shape to (batch_size, variable_dim)
+                discount = discount.view(-1, 1)
+                tau = tau.view(-1, self.tau_dim)
+                obs = obs.view(-1, self.obs_dim - self.skill_dim)
+                next_obs = next_obs.view(-1, self.obs_dim - self.skill_dim)
+                action = action.view(-1, self.action_dim)
+                skill = skill.view(-1, self.skill_dim)
 
                 metrics.update(self.update_contrastive(tau, skill))
-
-            rows = np.arange(tau.shape[0])
-            cols = np.random.randint(0, self.tau_dim - self.nstep, size=tau.shape[0])
-
-            obs = tau[rows, cols]
-            next_obs = tau[rows, cols + self.nstep]
-            discount = torch.as_tensor([0.99 ** self.nstep], device=self.device)
 
             # update q(z | tau)
             # bucket count for less time spending

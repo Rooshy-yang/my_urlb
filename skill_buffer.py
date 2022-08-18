@@ -163,12 +163,32 @@ class ReplayBuffer(IterableDataset):
         #     reward += discount * step_reward
         #     discount *= episode['discount'][idx + i] * self._discount
 
-        trajectory = episode['observation']
-        action = episode['action']
-        skill = episode['skill']
+        update_every_step = 50
+        tau_len = update_every_step
+
+        obs_dim = self._storage._data_specs[0].shape[0]
+        action_dim = self._storage._data_specs[1].shape[0]
+        skill_dim = self._storage._meta_specs[0].shape[0]
+        tau_dim = obs_dim * tau_len
+
+        trajectory = episode['observation'][:skill_dim * update_every_step]
+        # start from 1 for dummy transition
+        action = episode['action'][1:skill_dim * update_every_step + 1]
+        skill = episode['skill'][1:skill_dim * update_every_step + 1]
+
+        tau = trajectory.reshape(-1, tau_dim)
+        # without consider the case self.skill_dim * self.update_skill_every_step > max_len
+        cols = np.random.randint(0, tau_len - self._nstep, size=tau.shape[0])
+        rows = np.arange(tau.shape[0])
+
+        obs = tau.reshape(tau.shape[0], -1, obs_dim)[rows, cols]
+        next_obs = tau.reshape(tau.shape[0], -1, obs_dim)[rows, cols + self._nstep]
+        action = action.reshape(tau.shape[0], -1, action_dim)[rows, cols]
+        skill = skill.reshape(tau.shape[0], -1, skill_dim)[rows, cols]
+        discount = np.asarray([self._discount ** self._nstep] * tau.shape[0], dtype=np.float32)
 
         # return (trajectory, action, obs, next_obs, discount, skill)
-        return (trajectory, action, skill)
+        return (tau, obs, next_obs, action, discount, skill, )
 
     def __iter__(self):
         while True:
