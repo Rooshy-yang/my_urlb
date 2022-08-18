@@ -202,7 +202,7 @@ class Workspace:
             if eval_every_step(self.global_step):
                 self.logger.log('eval_total_time', self.timer.total_time(),
                                 self.global_frame)
-                # self.eval()
+                self.eval()
             meta = self.agent.update_meta(meta, self.global_step, time_step)
 
             # sample action
