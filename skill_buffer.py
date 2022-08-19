@@ -177,7 +177,7 @@ class ReplayBuffer(IterableDataset):
         skill = episode['skill'][1:skill_dim * update_every_step + 1]
 
         tau = trajectory.reshape(-1, tau_dim)
-        # without consider the case self.skill_dim * self.update_skill_every_step > max_len
+
         cols = np.random.randint(0, tau_len - self._nstep, size=tau.shape[0])
         rows = np.arange(tau.shape[0])
 
