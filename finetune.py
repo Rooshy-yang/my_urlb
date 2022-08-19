@@ -190,7 +190,7 @@ class Workspace:
                                 self.global_frame)
                 self.eval()
 
-            meta = self.agent.update_meta(meta, self.global_step, time_step)
+            meta = self.agent.update_meta(meta, self.global_step, time_step, finetune=True)
 
             if hasattr(self.agent, "regress_meta"):
                 repeat = self.cfg.action_repeat
