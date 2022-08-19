@@ -62,7 +62,7 @@ class DIAYNAgent(DDPGAgent):
         meta['skill'] = skill
         return meta
 
-    def update_meta(self, meta, global_step, time_step):
+    def update_meta(self, meta, global_step, time_step, finetune=False):
         if global_step % self.update_skill_every_step == 0:
             return self.init_meta()
         return meta
