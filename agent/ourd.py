@@ -236,6 +236,10 @@ class OURDAgent(DDPGAgent):
 
                 obs = obs.view(-1, self.obs_dim - self.skill_dim)
                 next_obs = next_obs.view(-1, self.obs_dim - self.skill_dim)
+                # augment and encode
+                obs = self.aug_and_encode(obs)
+                next_obs = self.aug_and_encode(next_obs)
+
                 action = action.view(-1, self.action_dim)
                 skill = skill.view(-1, self.skill_dim)
 
@@ -258,11 +262,12 @@ class OURDAgent(DDPGAgent):
 
             obs, action, extr_reward, discount, next_obs, skill = utils.to_torch(
                 batch, self.device)
+            # augment and encode
+            obs = self.aug_and_encode(obs)
+            next_obs = self.aug_and_encode(next_obs)
+
             reward = extr_reward
 
-        # augment and encode
-        obs = self.aug_and_encode(obs)
-        next_obs = self.aug_and_encode(next_obs)
 
         if self.use_tb or self.use_wandb:
             metrics['batch_reward'] = reward.mean().item()
