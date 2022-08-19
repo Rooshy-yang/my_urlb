@@ -151,6 +151,8 @@ class Workspace:
             log('episode_length', step * self.cfg.action_repeat / episode)
             log('episode', self.global_episode)
             log('step', self.global_step)
+            if 'skill' in meta.keys():
+                log('skill', torch.argmax(meta['skill']))
 
     def train(self):
         # predicates
@@ -186,6 +188,8 @@ class Workspace:
                         log('episode', self.global_episode)
                         log('buffer_size', len(self.replay_storage))
                         log('step', self.global_step)
+                        if 'skill' in meta.keys():
+                            log('skill', torch.argmax(meta['skill']))
 
                 # reset env
                 time_step = self.train_env.reset()
