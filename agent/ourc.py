@@ -91,6 +91,10 @@ class OURCAgent(DDPGAgent):
         self.discriminator.train()
 
         self.skill_ptr = 0
+        self.skill_V = [0] * self.skill_dim
+        self.skill_count = [0] * self.skill_dim
+        self.skill_R = [0] * self.skill_dim
+        self.ucb_scale = 10
 
 
     def get_meta_specs(self):
@@ -99,15 +103,46 @@ class OURCAgent(DDPGAgent):
     def init_meta(self):
         skill = np.zeros(self.skill_dim, dtype=np.float32)
         skill[self.skill_ptr] = 1
-        self.skill_ptr = (self.skill_ptr + 1) % self.skill_dim
         meta = OrderedDict()
         meta['skill'] = skill
         return meta
 
     def update_meta(self, meta, global_step, time_step, finetune=False):
-        if global_step % self.update_skill_every_step == 0:
-            return self.init_meta()
-        return meta
+        if finetune:
+            skill_num = meta['skill'].argmax()
+            self.skill_R[skill_num] += time_step.reward
+            self.skill_count[skill_num] += 1
+            if global_step % self.update_skill_every_step == 0:
+                skill = np.zeros(self.skill_dim, dtype=np.float32)
+
+                v = self.skill_R[skill_num]
+                # compute V(z) expectation
+                self.skill_V[skill_num] = self.skill_V[skill_num] + (v - self.skill_V[skill_num]) /\
+                                          self.skill_count[skill_num] * self.update_skill_every_step
+
+                # UCB planning
+                def ucb(i):
+                    return self.skill_V[i] + \
+                           self.ucb_scale * math.sqrt(abs(math.log(global_step + 1)) /
+                                         (self.skill_count[i] + 1e-6))
+
+                for idx, value in enumerate(self.skill_V):
+                    if ucb(idx) > ucb(self.skill_ptr):
+                        self.skill_ptr = idx
+
+                skill[self.skill_ptr] = 1
+                meta = OrderedDict()
+                meta['skill'] = skill
+
+                self.skill_R = [0] * self.skill_dim
+                return meta
+            else:
+                return meta
+        else:
+            if global_step % self.update_skill_every_step == 0:
+                self.skill_ptr = (self.skill_ptr + 1) % self.skill_dim
+                return self.init_meta()
+            return meta
 
     def update_gb(self, skill, gb_batch, step):
         metrics = dict()
