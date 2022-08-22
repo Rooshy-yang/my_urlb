@@ -92,7 +92,6 @@ class OURDAgent(DDPGAgent):
 
         self.skill_ptr = 0
 
-
     def get_meta_specs(self):
         return specs.Array((self.skill_dim,), np.float32, 'skill'),
 
