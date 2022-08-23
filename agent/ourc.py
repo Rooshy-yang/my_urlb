@@ -94,7 +94,7 @@ class OURCAgent(DDPGAgent):
         self.skill_V = [0] * self.skill_dim
         self.skill_count = [0] * self.skill_dim
         self.skill_R = [0] * self.skill_dim
-        self.ucb_scale = 10
+        self.ucb_scale = 2
 
 
     def get_meta_specs(self):
