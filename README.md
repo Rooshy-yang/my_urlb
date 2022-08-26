@@ -1,4 +1,6 @@
-# The Unsupervised Reinforcement Learning Benchmark (URLB)
+# My Unsupervised Reinforcement Learning Benchmark (URLB)
+
+This codebase is built on top of the [Unsupervised Reinforcement Learning Benchmark (URLB) codebase](https://anonymous.4open.science/r/urlb). I include agents for all baselines and my agent in the `agents` folder. 
 
 URLB provides a set of leading algorithms for unsupervised reinforcement learning where agents first pre-train without access to extrinsic rewards and then are finetuned to downstream tasks.
 
