@@ -72,7 +72,7 @@ class OURDAgent(DDPGAgent):
         self.tau_dim = (self.obs_dim - self.skill_dim) * self.tau_len
 
         # create ourd
-        self.gb = GeneratorB(self.obs_dim - self.skill_dim, self.skill_dim,
+        self.gb = GeneratorB(self.tau_dim, self.skill_dim,
                              kwargs['hidden_dim']).to(kwargs['device'])
 
         self.discriminator = Discriminator(self.tau_dim,
@@ -246,11 +246,11 @@ class OURDAgent(DDPGAgent):
 
             # update q(z | tau)
             # bucket count for less time spending
-            metrics.update(self.update_gb(skill, next_obs, step))
+            metrics.update(self.update_gb(skill, tau, step))
 
             # compute intrinsic reward
             with torch.no_grad():
-                intr_reward = self.compute_intr_reward(skill, tau,next_obs, metrics)
+                intr_reward = self.compute_intr_reward(skill, tau,tau, metrics)
 
             if self.use_tb or self.use_wandb:
                 metrics['intr_reward'] = intr_reward.mean().item()
