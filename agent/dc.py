@@ -246,11 +246,11 @@ class DCAgent(DDPGAgent):
 
             # update q(z | tau)
             # bucket count for less time spending
-            metrics.update(self.update_gb(skill, tau, step))
+            metrics.update(self.update_gb(skill, next_obs, step))
 
             # compute intrinsic reward
             with torch.no_grad():
-                intr_reward = self.compute_intr_reward(skill, tau, next_obs, metrics)
+                intr_reward = self.compute_intr_reward(skill, next_obs, next_obs, metrics)
 
             if self.use_tb or self.use_wandb:
                 metrics['intr_reward'] = intr_reward.mean().item()
