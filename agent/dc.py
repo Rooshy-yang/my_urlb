@@ -147,7 +147,7 @@ class DCAgent(DDPGAgent):
 
         return metrics
 
-    def compute_intr_reward(self, skills, tau_batch,next_obs, metrics):
+    def compute_intr_reward(self, skills, tau_batch, next_obs, metrics):
 
         # compute q(z | tau) reward
         d_pred = self.gb(next_obs)
