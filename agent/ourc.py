@@ -277,7 +277,7 @@ class OURCAgent(DDPGAgent):
             try_count = 0
             while self._not_allowed_update(skill):
                 batch = next(replay_iter)
-                tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
+                tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
                 if try_count > 3: return metrics
                 try_count += 1
             metrics.update(self.update_contrastive(tau, skill))
@@ -285,10 +285,10 @@ class OURCAgent(DDPGAgent):
             for _ in range(self.contrastive_update_rate - 1):
                 # one trajectory for self.skill_dim'th tau with different skill, obs,next_obs,action from every tau,
                 batch = next(replay_iter)
-                tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
+                tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
                 while self._not_allowed_update(skill):
                     batch = next(replay_iter)
-                    tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
+                    tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
                     if try_count > 3: return metrics
                     try_count += 1
 
