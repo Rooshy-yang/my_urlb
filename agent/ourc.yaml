@@ -19,7 +19,7 @@ stddev_clip: 0.3
 skill_dim: 16
 update_skill_every_step: 50
 nstep: 3
-batch_size: 64
+batch_size: 1024
 init_critic: true
 update_encoder: ${update_encoder}
 

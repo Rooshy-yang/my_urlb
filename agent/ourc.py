@@ -209,8 +209,6 @@ class OURCAgent(DDPGAgent):
 
     def compute_info_nce_loss(self, features, skills):
 
-        size = features.shape[0] // self.skill_dim
-
         labels = torch.argmax(skills, dim=1)
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
         labels = labels.to(self.device)
@@ -261,7 +259,11 @@ class OURCAgent(DDPGAgent):
 
         if self.reward_free:
 
-            for _ in range(self.contrastive_update_rate):
+            batch = next(replay_iter)
+            tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
+            metrics.update(self.update_contrastive(tau, skill))
+
+            for _ in range(self.contrastive_update_rate - 1):
                 # one trajectory for self.skill_dim'th tau with different skill, obs,next_obs,action from every tau,
                 batch = next(replay_iter)
                 tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)

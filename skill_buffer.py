@@ -149,46 +149,23 @@ class ReplayBuffer(IterableDataset):
         self._samples_since_last_fetch += 1
         episode = self._sample_episode()
         # add +1 for the first dummy transition
-        # idx = np.random.randint(0, episode_len(episode) - self._nstep + 1) + 1
-        # meta = []
-        # for spec in self._storage._meta_specs:
-        #     meta.append(episode[spec.name][idx - 1])
-        # obs = episode['observation'][idx - 1]
-        # action = episode['action'][idx]
-        # next_obs = episode['observation'][idx + self._nstep - 1]
-        # reward = np.zeros_like(episode['reward'][idx])
-        # discount = np.ones_like(episode['discount'][idx])
-        # for i in range(self._nstep):
-        #     step_reward = episode['reward'][idx + i]
-        #     reward += discount * step_reward
-        #     discount *= episode['discount'][idx + i] * self._discount
+        update_skill_every_step = 50
 
-        update_every_step = 50
-        tau_len = update_every_step
-
-        obs_dim = self._storage._data_specs[0].shape[0]
-        action_dim = self._storage._data_specs[1].shape[0]
-        skill_dim = self._storage._meta_specs[0].shape[0]
-        tau_dim = obs_dim * tau_len
-
-        trajectory = episode['observation'][:skill_dim * update_every_step]
-        # start from 1 for dummy transition
-        action = episode['action'][1:skill_dim * update_every_step + 1]
-        skill = episode['skill'][1:skill_dim * update_every_step + 1]
-
-        tau = trajectory.reshape(-1, tau_dim)
-
-        cols = np.random.randint(0, tau_len - self._nstep, size=tau.shape[0])
-        rows = np.arange(tau.shape[0])
-
-        obs = tau.reshape(tau.shape[0], -1, obs_dim)[rows, cols]
-        next_obs = tau.reshape(tau.shape[0], -1, obs_dim)[rows, cols + self._nstep]
-        action = action.reshape(tau.shape[0], -1, action_dim)[rows, cols]
-        skill = skill.reshape(tau.shape[0], -1, skill_dim)[rows, cols]
-        discount = np.asarray([self._discount ** self._nstep] * tau.shape[0], dtype=np.float32)
-
-        # return (trajectory, action, obs, next_obs, discount, skill)
-        return (tau, obs, next_obs, action, discount, skill, )
+        idx = np.random.randint(0, episode_len(episode) - self._nstep + 1) + 1
+        meta = []
+        for spec in self._storage._meta_specs:
+            meta.append(episode[spec.name][idx - 1])
+        obs = episode['observation'][idx - 1]
+        action = episode['action'][idx]
+        next_obs = episode['observation'][idx + self._nstep - 1]
+        reward = np.zeros_like(episode['reward'][idx])
+        discount = np.ones_like(episode['discount'][idx])
+        for i in range(self._nstep):
+            step_reward = episode['reward'][idx + i]
+            reward += discount * step_reward
+            discount *= episode['discount'][idx + i] * self._discount
+        tau = episode['observation'][idx % update_skill_every_step: idx % update_skill_every_step + update_skill_every_step]
+        return (obs, action, reward, discount, next_obs, *meta)
 
     def __iter__(self):
         while True:
