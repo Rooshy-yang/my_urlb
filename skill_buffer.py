@@ -167,6 +167,7 @@ class ReplayBuffer(IterableDataset):
             
         tau_idx = idx % update_skill_every_step
         tau = episode['observation'][tau_idx * update_skill_every_step: tau_idx * (update_skill_every_step + 1)]
+        tau = tau.flatten()
         return (tau, obs, action, reward, discount, next_obs, *meta)
 
     def __iter__(self):
