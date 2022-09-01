@@ -96,7 +96,6 @@ class OURCAgent(DDPGAgent):
         self.skill_R = [0] * self.skill_dim
         self.ucb_scale = 2
 
-
     def get_meta_specs(self):
         return specs.Array((self.skill_dim,), np.float32, 'skill'),
 
@@ -117,14 +116,14 @@ class OURCAgent(DDPGAgent):
 
                 v = self.skill_R[skill_num]
                 # compute V(z) expectation
-                self.skill_V[skill_num] = self.skill_V[skill_num] + (v - self.skill_V[skill_num]) /\
+                self.skill_V[skill_num] = self.skill_V[skill_num] + (v - self.skill_V[skill_num]) / \
                                           self.skill_count[skill_num] * self.update_skill_every_step
 
                 # UCB planning
                 def ucb(i):
                     return self.skill_V[i] + \
                            self.ucb_scale * math.sqrt(abs(math.log(global_step + 1)) /
-                                         (self.skill_count[i] + 1e-6))
+                                                      (self.skill_count[i] + 1e-6))
 
                 for idx, value in enumerate(self.skill_V):
                     if ucb(idx) > ucb(self.skill_ptr):
@@ -166,8 +165,8 @@ class OURCAgent(DDPGAgent):
     def update_contrastive(self, taus, skills):
         metrics = dict()
         features = self.discriminator(taus)
-        logits, labels = self.compute_info_nce_loss(features, skills)
-        loss = self.discriminator_criterion(logits, labels)
+        logits = self.compute_info_nce_loss(features, skills)
+        loss = logits.mean()
 
         self.dis_opt.zero_grad()
         if self.encoder_opt is not None:
@@ -188,7 +187,8 @@ class OURCAgent(DDPGAgent):
         d_pred = self.gb(tau_batch)
         d_pred_log_softmax = F.log_softmax(d_pred, dim=1)
         _, pred_z = torch.max(d_pred_log_softmax, dim=1, keepdim=True)
-        gb_reward = d_pred_log_softmax[torch.arange(d_pred.shape[0]), torch.argmax(skills, dim=1)] - math.log(1 / self.skill_dim)
+        gb_reward = d_pred_log_softmax[torch.arange(d_pred.shape[0]), torch.argmax(skills, dim=1)] - math.log(
+            1 / self.skill_dim)
         gb_reward = gb_reward.reshape(-1, 1)
 
         if self.use_tb or self.use_wandb:
@@ -196,9 +196,7 @@ class OURCAgent(DDPGAgent):
 
         # compute contrastive reward
         features = self.discriminator(tau_batch)
-        logits, labels = self.compute_info_nce_loss(features, skills)
-
-        contrastive_reward = torch.softmax(logits, dim=1)[:, 0].view(tau_batch.shape[0], -1)
+        contrastive_reward = torch.exp(-self.compute_info_nce_loss(features, skills))
 
         intri_reward = gb_reward + contrastive_reward * self.contrastive_scale
 
@@ -208,9 +206,9 @@ class OURCAgent(DDPGAgent):
         return intri_reward
 
     def compute_info_nce_loss(self, features, skills):
-
+        # label positives samples
         labels = torch.argmax(skills, dim=1)
-        labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
+        labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).long()
         labels = labels.to(self.device)
 
         features = F.normalize(features, dim=1)
@@ -222,17 +220,21 @@ class OURCAgent(DDPGAgent):
         labels = labels[~mask].view(labels.shape[0], -1)
         similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
 
+        similarity_matrix = torch.exp(similarity_matrix / self.temperature)
+
+        # update not only when all negative sample existed
+        # assert labels[pick_one_positive_sample_idx]
+        pick_one_positive_sample_idx = torch.argmax(labels, dim=-1, keepdim=True)
+        pick_one_positive_sample_idx = torch.zeros_like(labels).scatter_(-1, pick_one_positive_sample_idx, 1)
+        neg = (~labels.bool()).long()
+
         # select one and combine multiple positives
-        positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)[:, 0].view(labels.shape[0], -1)
+        positives = torch.sum(similarity_matrix * pick_one_positive_sample_idx, dim=-1, keepdim=True)
+        negatives = torch.sum(similarity_matrix * neg, dim=-1, keepdim=True)
 
-        negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
+        loss = -torch.log(positives / negatives)
 
-        # set positives on column 0
-        logits = torch.cat([positives, negatives], dim=1)
-        labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.device)
-
-        logits = logits / self.temperature
-        return logits, labels
+        return loss
 
     def compute_gb_loss(self, taus, skill):
         """
@@ -251,6 +253,17 @@ class OURCAgent(DDPGAgent):
             pred_z.size())[0]
         return d_loss, df_accuracy
 
+    def _not_allowed_update(self, skill):
+        # not allowed update contrastive loss if only one positive sample in one skill
+        skill_num = torch.argmax(skill, dim=-1)
+        bucket = [0] * self.skill_dim
+        for i in skill_num:
+            bucket[i] += 1
+        for num in bucket:
+            if num == 1:
+                return True
+        return False
+
     def update(self, replay_iter, step):
         metrics = dict()
 
@@ -260,20 +273,24 @@ class OURCAgent(DDPGAgent):
         if self.reward_free:
 
             batch = next(replay_iter)
-            tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
+            tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
+            try_count = 0
+            while self._not_allowed_update(skill):
+                batch = next(replay_iter)
+                tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
+                if try_count > 3: return metrics
+                try_count += 1
             metrics.update(self.update_contrastive(tau, skill))
 
             for _ in range(self.contrastive_update_rate - 1):
                 # one trajectory for self.skill_dim'th tau with different skill, obs,next_obs,action from every tau,
                 batch = next(replay_iter)
                 tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
-                # shape to (batch_size, variable_dim)
-                discount = discount.view(-1, 1)
-                tau = tau.view(-1, self.tau_dim)
-                obs = obs.view(-1, self.obs_dim - self.skill_dim)
-                next_obs = next_obs.view(-1, self.obs_dim - self.skill_dim)
-                action = action.view(-1, self.action_dim)
-                skill = skill.view(-1, self.skill_dim)
+                while self._not_allowed_update(skill):
+                    batch = next(replay_iter)
+                    tau, obs, next_obs, action, discount, skill = utils.to_torch(batch, self.device)
+                    if try_count > 3: return metrics
+                    try_count += 1
 
                 metrics.update(self.update_contrastive(tau, skill))
 
