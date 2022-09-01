@@ -9,7 +9,8 @@ This codebase was adapted from [DrQv2](https://github.com/facebookresearch/drqv2
 ## Requirements
 We assume you have access to a GPU that can run CUDA 10.2 and CUDNN 8. Then, the simplest way to install all required dependencies is to create an anaconda environment by running
 ```sh
-conda env create -f conda_env.yml
+add "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/.mujoco/mujoco200/bin" in your ~/.bashrc if you install by: 
+conda env create -f environment.yml
 ```
 After the instalation ends you can activate your environment with
 ```sh
