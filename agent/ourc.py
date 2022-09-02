@@ -231,8 +231,8 @@ class OURCAgent(DDPGAgent):
         # select one and combine multiple positives
         positives = torch.sum(similarity_matrix * pick_one_positive_sample_idx, dim=-1, keepdim=True)
         negatives = torch.sum(similarity_matrix * neg, dim=-1, keepdim=True)
-
-        loss = -torch.log(positives / negatives)
+        eps = torch.as_tensor(1e6)
+        loss = -torch.log(positives / (negatives + eps))
 
         return loss
 
@@ -275,22 +275,22 @@ class OURCAgent(DDPGAgent):
             batch = next(replay_iter)
             tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
             try_count = 0
-            while self._not_allowed_update(skill):
-                batch = next(replay_iter)
-                tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
-                if try_count > 3: return metrics
-                try_count += 1
+            # while self._not_allowed_update(skill):
+            #     batch = next(replay_iter)
+            #     tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
+            #     if try_count > 3: return metrics
+            #     try_count += 1
             metrics.update(self.update_contrastive(tau, skill))
 
             for _ in range(self.contrastive_update_rate - 1):
                 # one trajectory for self.skill_dim'th tau with different skill, obs,next_obs,action from every tau,
                 batch = next(replay_iter)
                 tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
-                while self._not_allowed_update(skill):
-                    batch = next(replay_iter)
-                    tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
-                    if try_count > 3: return metrics
-                    try_count += 1
+                # while self._not_allowed_update(skill):
+                #     batch = next(replay_iter)
+                #     tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
+                #     if try_count > 3: return metrics
+                #     try_count += 1
 
                 metrics.update(self.update_contrastive(tau, skill))
 
