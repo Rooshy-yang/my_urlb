@@ -81,7 +81,6 @@ class OURCAgent(DDPGAgent):
 
         # loss criterion
         self.gb_criterion = nn.CrossEntropyLoss()
-        self.discriminator_criterion = nn.CrossEntropyLoss()
 
         # optimizers
         self.gb_opt = torch.optim.Adam(self.gb.parameters(), lr=self.lr)
