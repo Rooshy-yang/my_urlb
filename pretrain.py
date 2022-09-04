@@ -19,7 +19,7 @@ from dm_env import specs
 import dmc
 import utils
 from logger import Logger
-from skill_buffer import ReplayBufferStorage, make_replay_loader
+from replay_buffer import ReplayBufferStorage, make_replay_loader
 from video import TrainVideoRecorder, VideoRecorder
 
 torch.backends.cudnn.benchmark = True
@@ -188,7 +188,6 @@ class Workspace:
                         log('episode', self.global_episode)
                         log('buffer_size', len(self.replay_storage))
                         log('step', self.global_step)
-
 
                 # reset env
                 time_step = self.train_env.reset()
