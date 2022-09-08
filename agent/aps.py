@@ -204,7 +204,9 @@ class APSAgent(DDPGAgent):
             with torch.no_grad():
                 intr_ent_reward, intr_sf_reward = self.compute_intr_reward(
                     task, next_obs, step)
-                intr_reward = intr_ent_reward + intr_sf_reward
+                # intr_reward = intr_ent_reward + intr_sf_reward
+                # Modified VISR
+                intr_reward = intr_sf_reward
 
             if self.use_tb or self.use_wandb:
                 metrics['intr_reward'] = intr_reward.mean().item()
