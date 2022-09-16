@@ -136,12 +136,13 @@ class CICAgent(DDPGAgent):
         return (specs.Array((self.skill_dim,), np.float32, 'skill'),)
 
     def init_meta(self):
-        if not self.reward_free:
-            # selects mean skill of 0.5 (to select skill automatically use CEM or Grid Sweep
-            # procedures described in the CIC paper)
-            skill = np.ones(self.skill_dim).astype(np.float32) * 0.5
-        else:
-            skill = np.random.uniform(0, 1, self.skill_dim).astype(np.float32)
+        # if not self.reward_free:
+        #     # selects mean skill of 0.5 (to select skill automatically use CEM or Grid Sweep
+        #     # procedures described in the CIC paper)
+        #     skill = np.ones(self.skill_dim).astype(np.float32) * 0.5
+        # else:
+        #     skill = np.random.uniform(0, 1, self.skill_dim).astype(np.float32)
+        skill = np.random.uniform(0, 1, self.skill_dim).astype(np.float32)
         meta = OrderedDict()
         meta['skill'] = skill
         return meta
@@ -152,6 +153,7 @@ class CICAgent(DDPGAgent):
         return meta
 
     def compute_cpc_loss(self, obs, next_obs, skill):
+        # only SimCLR,
         temperature = self.temp
         eps = 1e-6
         query, key = self.cic.forward(obs, next_obs, skill)
