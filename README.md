@@ -7,9 +7,12 @@ URLB provides a set of leading algorithms for unsupervised reinforcement learnin
 This codebase was adapted from [DrQv2](https://github.com/facebookresearch/drqv2). The DDPG agent and training scripts were developed by Denis Yarats. All authors contributed to developing individual baselines for URLB.
 
 ## Requirements
-We assume you have access to a GPU that can run CUDA 10.2 and CUDNN 8. Then, the simplest way to install all required dependencies is to create an anaconda environment by running
+We assume you have access to a GPU that can run CUDA 10.2 and CUDNN 8. Then, the simplest way to install all required dependencies is to create an anaconda environment. first add this path in your ~/.bashrc:
 ```sh
-add "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/.mujoco/mujoco200/bin" in your ~/.bashrc if you install by: 
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.mujoco/mujoco200/bin
+```
+then run 
+```sh
 conda env create -f environment.yml
 ```
 After the instalation ends you can activate your environment with
