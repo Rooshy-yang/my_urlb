@@ -100,47 +100,59 @@ class OURCAgent(DDPGAgent):
 
     def init_meta(self):
         skill = np.zeros(self.skill_dim, dtype=np.float32)
-        skill[self.skill_ptr] = 1
+        skill[np.random.choice(self.skill_dim)] = 1.0
         meta = OrderedDict()
         meta['skill'] = skill
         return meta
 
     def update_meta(self, meta, global_step, time_step, finetune=False):
-        if finetune:
-            skill_num = meta['skill'].argmax()
-            self.skill_R[skill_num] += time_step.reward
-            self.skill_count[skill_num] += 1
-            if global_step % self.update_skill_every_step == 0:
-                skill = np.zeros(self.skill_dim, dtype=np.float32)
+        if global_step % self.update_skill_every_step == 0:
+            return self.init_meta()
+        return meta
 
-                v = self.skill_R[skill_num]
-                # compute V(z) expectation
-                self.skill_V[skill_num] = self.skill_V[skill_num] + (v - self.skill_V[skill_num]) / \
-                                          self.skill_count[skill_num] * self.update_skill_every_step
-
-                # UCB planning
-                def ucb(i):
-                    return self.skill_V[i] + \
-                           self.ucb_scale * math.sqrt(abs(math.log(global_step + 1)) /
-                                                      (self.skill_count[i] + 1e-6))
-
-                for idx, value in enumerate(self.skill_V):
-                    if ucb(idx) > ucb(self.skill_ptr):
-                        self.skill_ptr = idx
-
-                skill[self.skill_ptr] = 1
-                meta = OrderedDict()
-                meta['skill'] = skill
-
-                self.skill_R = [0] * self.skill_dim
-                return meta
-            else:
-                return meta
-        else:
-            if global_step % self.update_skill_every_step == 0:
-                self.skill_ptr = (self.skill_ptr + 1) % self.skill_dim
-                return self.init_meta()
-            return meta
+    # def init_meta(self):
+    #     skill = np.zeros(self.skill_dim, dtype=np.float32)
+    #     skill[self.skill_ptr] = 1
+    #     meta = OrderedDict()
+    #     meta['skill'] = skill
+    #     return meta
+    #
+    # def update_meta(self, meta, global_step, time_step, finetune=False):
+    # if finetune:
+    #     skill_num = meta['skill'].argmax()
+    #     self.skill_R[skill_num] += time_step.reward
+    #     self.skill_count[skill_num] += 1
+    #     if global_step % self.update_skill_every_step == 0:
+    #         skill = np.zeros(self.skill_dim, dtype=np.float32)
+    #
+    #         v = self.skill_R[skill_num]
+    #         # compute V(z) expectation
+    #         self.skill_V[skill_num] = self.skill_V[skill_num] + (v - self.skill_V[skill_num]) / \
+    #                                   self.skill_count[skill_num] * self.update_skill_every_step
+    #
+    #         # UCB planning
+    #         def ucb(i):
+    #             return self.skill_V[i] + \
+    #                    self.ucb_scale * math.sqrt(abs(math.log(global_step + 1)) /
+    #                                               (self.skill_count[i] + 1e-6))
+    #
+    #         for idx, value in enumerate(self.skill_V):
+    #             if ucb(idx) > ucb(self.skill_ptr):
+    #                 self.skill_ptr = idx
+    #
+    #         skill[self.skill_ptr] = 1
+    #         meta = OrderedDict()
+    #         meta['skill'] = skill
+    #
+    #         self.skill_R = [0] * self.skill_dim
+    #         return meta
+    #     else:
+    #         return meta
+    # else:
+    #     if global_step % self.update_skill_every_step == 0:
+    #         self.skill_ptr = (self.skill_ptr + 1) % self.skill_dim
+    #         return self.init_meta()
+    #     return meta
 
     def update_gb(self, skill, gb_batch, step):
         metrics = dict()
@@ -180,10 +192,10 @@ class OURCAgent(DDPGAgent):
 
         return metrics
 
-    def compute_intr_reward(self, skills, tau_batch, metrics):
+    def compute_intr_reward(self, skills, tau, metrics):
 
         # compute q(z | tau) reward
-        d_pred = self.gb(tau_batch)
+        d_pred = self.gb(tau)
         d_pred_log_softmax = F.log_softmax(d_pred, dim=1)
         _, pred_z = torch.max(d_pred_log_softmax, dim=1, keepdim=True)
         gb_reward = d_pred_log_softmax[torch.arange(d_pred.shape[0]), torch.argmax(skills, dim=1)] - math.log(
@@ -194,7 +206,7 @@ class OURCAgent(DDPGAgent):
             metrics['gb_reward'] = gb_reward.mean().item()
 
         # compute contrastive reward
-        features = self.discriminator(tau_batch)
+        features = self.discriminator(tau)
         contrastive_reward = torch.exp(-self.compute_info_nce_loss(features, skills))
 
         intri_reward = gb_reward + contrastive_reward * self.contrastive_scale
@@ -237,7 +249,7 @@ class OURCAgent(DDPGAgent):
 
     def compute_gb_loss(self, taus, skill):
         """
-        DF Loss
+        discriminator Loss
         """
 
         d_pred = self.gb(taus)
@@ -273,7 +285,6 @@ class OURCAgent(DDPGAgent):
 
             batch = next(replay_iter)
             tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
-            try_count = 0
             # while self._not_allowed_update(skill):
             #     batch = next(replay_iter)
             #     tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
