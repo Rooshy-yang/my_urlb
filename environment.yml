@@ -220,7 +220,7 @@ dependencies:
     - matplotlib==3.4.2
     - moviepy==1.0.3
     - mujoco==2.1.5
-    - mujoco-py==2.0.2.13
+    - mujoco-py==2.0.2.8
     - nvidia-ml-py3==7.352.0
     - oauthlib==3.2.0
     - omegaconf==2.1.2

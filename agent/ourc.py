@@ -72,10 +72,11 @@ class OURCAgent(DDPGAgent):
         self.tau_dim = (self.obs_dim - self.skill_dim) * self.tau_len
 
         # create ourc
-        self.gb = GeneratorB(self.tau_dim, self.skill_dim,
+        self.gb = GeneratorB(self.obs_dim - self.skill_dim,
+                             self.skill_dim,
                              kwargs['hidden_dim']).to(kwargs['device'])
 
-        self.discriminator = Discriminator(self.tau_dim,
+        self.discriminator = Discriminator(self.obs_dim - self.skill_dim,
                                            self.skill_dim,
                                            kwargs['hidden_dim']).to(kwargs['device'])
 
@@ -284,33 +285,35 @@ class OURCAgent(DDPGAgent):
         if self.reward_free:
 
             batch = next(replay_iter)
-            tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
+            # tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
+            obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
             # while self._not_allowed_update(skill):
+
             #     batch = next(replay_iter)
             #     tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
             #     if try_count > 3: return metrics
             #     try_count += 1
-            metrics.update(self.update_contrastive(tau, skill))
+            metrics.update(self.update_contrastive(next_obs, skill))
 
             for _ in range(self.contrastive_update_rate - 1):
                 # one trajectory for self.skill_dim'th tau with different skill, obs,next_obs,action from every tau,
                 batch = next(replay_iter)
-                tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
+                obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
                 # while self._not_allowed_update(skill):
                 #     batch = next(replay_iter)
                 #     tau, obs, action, reward, discount, next_obs, skill = utils.to_torch(batch, self.device)
                 #     if try_count > 3: return metrics
                 #     try_count += 1
 
-                metrics.update(self.update_contrastive(tau, skill))
+                metrics.update(self.update_contrastive(next_obs, skill))
 
             # update q(z | tau)
             # bucket count for less time spending
-            metrics.update(self.update_gb(skill, tau, step))
+            metrics.update(self.update_gb(skill, next_obs, step))
 
             # compute intrinsic reward
             with torch.no_grad():
-                intr_reward = self.compute_intr_reward(skill, tau, metrics)
+                intr_reward = self.compute_intr_reward(skill, next_obs, metrics)
 
             if self.use_tb or self.use_wandb:
                 metrics['intr_reward'] = intr_reward.mean().item()
